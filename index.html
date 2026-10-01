@@ -1,27 +1,43 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>シンプルPWAメモ</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4f46e5">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Cropper & WebP Converter</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
 </head>
 <body>
-    <header>
-        <h1>マイメモアプリ</h1>
-    </header>
-    <main>
-        <div class="input-container">
-            <textarea id="memo-input" placeholder="メモを入力してください..."></textarea>
-            <button id="save-btn">保存</button>
+  <div class="container">
+    <h1>WebP トリミング・変換</h1>
+
+    <div id="dropzone" class="dropzone">
+      <p>ここに画像をドロップするか、<br>ファイルを選択してください</p>
+      <button class="btn" id="selectBtn">ファイルを選ぶ</button>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div id="editorContainer" class="editor-container hidden">
+      <div class="canvas-wrapper">
+        <canvas id="imageCanvas"></canvas>
+      </div>
+      
+      <div class="controls">
+        <div class="control-group">
+          <label for="qualityRange">画質 (WebP Quality): <span id="qualityVal">85</span>%</label>
+          <input type="range" id="qualityRange" min="1" max="100" value="85">
         </div>
-        <div class="memo-list-container">
-            <h2>保存されたメモ</h2>
-            <ul id="memo-list"></ul>
-        </div>
-    </main>
-    <script src="script.js"></script>
+        <div class="file-info" id="fileInfo">元のサイズ: - / 変換後予想: -</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-secondary" id="resetBtn">画像を変える</button>
+        <button class="btn" id="convertBtn">WebPとして保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>

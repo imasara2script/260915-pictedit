@@ -1,16 +1,31 @@
 {
-    "name": "シンプルPWAメモ",
-    "short_name": "PWAメモ",
-    "start_url": "./index.html",
-    "display": "standalone",
-    "background_color": "#f3f4f6",
-    "theme_color": "#4f46e5",
-    "icons": [
+  "name": "Image Cropper & WebP Converter",
+  "short_name": "ImgConverter",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./index.html",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
         {
-            "src": "icon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml",
-            "purpose": "any maskable"
+          "name": "image",
+          "accept": ["image/*"]
         }
-    ]
+      ]
+    }
+  }
 }
