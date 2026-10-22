@@ -1,7 +1,9 @@
 {
   "name": "Image Cropper & WebP Converter",
   "short_name": "ImgConverter",
+  "description": "Crop and convert images to WebP format",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
@@ -14,7 +16,7 @@
     }
   ],
   "share_target": {
-    "action": "./",
+    "action": "./index.html",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {

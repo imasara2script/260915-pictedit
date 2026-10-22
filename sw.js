@@ -1,4 +1,4 @@
-const CACHE_NAME = 'webp-converter-v2';
+const CACHE_NAME = 'webp-converter-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -53,7 +53,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
   // 共有ターゲット (POST) からのリクエスト処理
-  if (e.request.method === 'POST') {
+  if (e.request.method === 'POST' && (url.pathname.endsWith('index.html') || url.pathname.endsWith('/'))) {
     e.respondWith(
       (async () => {
         try {

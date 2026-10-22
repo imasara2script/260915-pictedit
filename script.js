@@ -51,7 +51,6 @@ document.addEventListener('DOMContentLoaded', () => {
           // Check if not too old (e.g. within 1 minute)
           if (Date.now() - request.result.timestamp < 60000) {
             loadImageFile(request.result.file);
-            // Clear it after reading so it doesn't reload on refresh
             clearSharedImage();
           }
         }
