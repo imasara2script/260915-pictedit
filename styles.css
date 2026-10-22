@@ -167,3 +167,12 @@ h1 {
   color: var(--text-light);
   text-align: center;
 }
+
+.app-footer {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}

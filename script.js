@@ -22,22 +22,68 @@ document.addEventListener('DOMContentLoaded', () => {
   // Register Service Worker for PWA
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(err => {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        console.log('ServiceWorker registration successful', reg.scope);
+      }).catch(err => {
         console.log('ServiceWorker registration failed: ', err);
       });
     });
+
+    // Receive message from Service Worker for shared files
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'shared-image' && event.data.file) {
+        loadImageFile(event.data.file);
+      }
+    });
   }
 
-  // Handle Share Target parameters (GET)
-  window.addEventListener('DOMContentLoaded', () => {
-    const params = new URLSearchParams(window.location.search);
-    const imageParam = params.get('image'); // if passed via share target url
-    if (imageParam) {
-      // Fetch if needed, or handle cache
-    }
-  });
+  // Check IndexedDB on startup for any pending shared images
+  checkIndexedDBForSharedImage();
 
-  // Also check if files were shared via POST Share Target (using IndexedDB or caches API in real scenarios, simplified here via File handling if available)
+  async function checkIndexedDBForSharedImage() {
+    try {
+      const db = await openDB();
+      const tx = db.transaction('sharedImages', 'readonly');
+      const store = tx.objectStore('sharedImages');
+      const request = store.get('latestShared');
+      request.onsuccess = () => {
+        if (request.result && request.result.file) {
+          // Check if not too old (e.g. within 1 minute)
+          if (Date.now() - request.result.timestamp < 60000) {
+            loadImageFile(request.result.file);
+            // Clear it after reading so it doesn't reload on refresh
+            clearSharedImage();
+          }
+        }
+      };
+    } catch (e) {
+      console.log('No shared image in DB or DB error:', e);
+    }
+  }
+
+  function clearSharedImage() {
+    indexedDB.open('ImageEditorDB', 1).onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction('sharedImages', 'readwrite');
+      tx.objectStore('sharedImages').delete('latestShared');
+    };
+  }
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('ImageEditorDB', 1);
+      request.onupgradeneeded = event => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('sharedImages')) {
+          db.createObjectStore('sharedImages', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = event => resolve(event.target.result);
+      request.onerror = event => reject(event.target.error);
+    });
+  }
+
+  // Handle Web Share Target via launchQueue if supported
   if ('launchQueue' in window) {
     window.launchQueue.setConsumer(async (launchParams) => {
       if (!launchParams.files || launchParams.files.length === 0) {
@@ -93,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.width = img.width;
     canvas.height = img.height;
     
-    // Default crop area is full image
     cropRect = { x: 0, y: 0, width: img.width, height: img.height };
     drawCanvas();
     updateFileInfo();
@@ -103,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0);
 
-    // Draw crop overlay if dragging or cropped
     if (cropRect.width > 0 && cropRect.height > 0) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -115,14 +159,12 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.drawImage(img, 0, 0);
       ctx.restore();
 
-      // Border around crop rect
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = Math.max(2, canvas.width / 200);
       ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
     }
   }
 
-  // Mouse / Touch events for cropping
   function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -154,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let width = Math.abs(endX - startX);
     let height = Math.abs(endY - startY);
 
-    // Boundary checks
     x = Math.max(0, Math.min(x, canvas.width));
     y = Math.max(0, Math.min(y, canvas.height));
     width = Math.min(width, canvas.width - x);
@@ -168,14 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isDragging) return;
     isDragging = false;
     if (cropRect.width < 10 || cropRect.height < 10) {
-      // Reset to full if too small
       cropRect = { x: 0, y: 0, width: img.width, height: img.height };
       drawCanvas();
     }
     updateFileInfo();
   });
 
-  // Touch support
   canvas.addEventListener('touchstart', (e) => {
     isDragging = true;
     const coords = getCanvasCoords(e);
@@ -231,8 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateFileInfo() {
     if (!originalFile) return;
     const originalSizeFormatted = formatBytes(originalFile.size);
-    
-    // Estimate WebP size using canvas export
     const quality = parseInt(qualityRange.value) / 100;
     
     const tempCanvas = document.createElement('canvas');
