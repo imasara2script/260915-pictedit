@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('fileInput');
   const selectBtn = document.getElementById('selectBtn');
   const editorContainer = document.getElementById('editorContainer');
+  const canvasWrapper = document.getElementById('canvasWrapper');
   const canvas = document.getElementById('imageCanvas');
   const ctx = canvas.getContext('2d');
   const qualityRange = document.getElementById('qualityRange');
@@ -10,14 +11,46 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetBtn = document.getElementById('resetBtn');
   const convertBtn = document.getElementById('convertBtn');
   const fileInfo = document.getElementById('fileInfo');
+  const modeCrop = document.getElementById('modeCrop');
+  const modePan = document.getElementById('modePan');
 
   let img = new Image();
   let originalFile = null;
   
+  // App mode: 'crop' or 'pan'
+  let currentMode = 'crop';
+
+  // Transform state for Pan/Zoom
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+  let isPanning = false;
+  let startPanX = 0;
+  let startPanY = 0;
+
+  // Pinch zoom variables
+  let initialPinchDistance = null;
+  let initialScale = 1;
+
   // Crop state variables
   let isDragging = false;
   let startX, startY, endX, endY;
   let cropRect = { x: 0, y: 0, width: 0, height: 0 };
+
+  // Mode switching
+  modeCrop.addEventListener('click', () => {
+    currentMode = 'crop';
+    modeCrop.classList.add('active');
+    modePan.classList.remove('active');
+    canvas.style.cursor = 'crosshair';
+  });
+
+  modePan.addEventListener('click', () => {
+    currentMode = 'pan';
+    modePan.classList.add('active');
+    modeCrop.classList.remove('active');
+    canvas.style.cursor = 'grab';
+  });
 
   // Register Service Worker for PWA
   if ('serviceWorker' in navigator) {
@@ -29,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Receive message from Service Worker for shared files
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'shared-image' && event.data.file) {
         loadImageFile(event.data.file);
@@ -37,7 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Check IndexedDB on startup for any pending shared images
   checkIndexedDBForSharedImage();
 
   async function checkIndexedDBForSharedImage() {
@@ -48,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const request = store.get('latestShared');
       request.onsuccess = () => {
         if (request.result && request.result.file) {
-          // Check if not too old (e.g. within 1 minute)
           if (Date.now() - request.result.timestamp < 60000) {
             loadImageFile(request.result.file);
             clearSharedImage();
@@ -82,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle Web Share Target via launchQueue if supported
   if ('launchQueue' in window) {
     window.launchQueue.setConsumer(async (launchParams) => {
       if (!launchParams.files || launchParams.files.length === 0) {
@@ -138,9 +167,18 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.width = img.width;
     canvas.height = img.height;
     
+    scale = 1;
+    panX = 0;
+    panY = 0;
     cropRect = { x: 0, y: 0, width: img.width, height: img.height };
+    
+    updateCanvasTransform();
     drawCanvas();
     updateFileInfo();
+  }
+
+  function updateCanvasTransform() {
+    canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
   }
 
   function drawCanvas() {
@@ -176,82 +214,153 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // Mouse Wheel Zoom
+  canvasWrapper.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    if (e.deltaY < 0) {
+      scale = Math.min(scale * (1 + zoomIntensity), 5);
+    } else {
+      scale = Math.max(scale * (1 - zoomIntensity), 0.5);
+    }
+    updateCanvasTransform();
+  }, { passive: false });
+
+  // Pointer / Touch Events handling
   canvas.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    const coords = getCanvasCoords(e);
-    startX = coords.x;
-    startY = coords.y;
-    cropRect = { x: startX, y: startY, width: 0, height: 0 };
+    if (currentMode === 'pan') {
+      isPanning = true;
+      startPanX = e.clientX - panX;
+      startPanY = e.clientY - panY;
+      canvas.style.cursor = 'grabbing';
+    } else {
+      isDragging = true;
+      const coords = getCanvasCoords(e);
+      startX = coords.x;
+      startY = coords.y;
+      cropRect = { x: startX, y: startY, width: 0, height: 0 };
+    }
   });
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const coords = getCanvasCoords(e);
-    endX = coords.x;
-    endY = coords.y;
+  window.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+      panX = e.clientX - startPanX;
+      panY = e.clientY - startPanY;
+      updateCanvasTransform();
+    } else if (isDragging) {
+      const coords = getCanvasCoords(e);
+      endX = coords.x;
+      endY = coords.y;
 
-    let x = Math.min(startX, endX);
-    let y = Math.min(startY, endY);
-    let width = Math.abs(endX - startX);
-    let height = Math.abs(endY - startY);
+      let x = Math.min(startX, endX);
+      let y = Math.min(startY, endY);
+      let width = Math.abs(endX - startX);
+      let height = Math.abs(endY - startY);
 
-    x = Math.max(0, Math.min(x, canvas.width));
-    y = Math.max(0, Math.min(y, canvas.height));
-    width = Math.min(width, canvas.width - x);
-    height = Math.min(height, canvas.height - y);
+      x = Math.max(0, Math.min(x, canvas.width));
+      y = Math.max(0, Math.min(y, canvas.height));
+      width = Math.min(width, canvas.width - x);
+      height = Math.min(height, canvas.height - y);
 
-    cropRect = { x, y, width, height };
-    drawCanvas();
+      cropRect = { x, y, width, height };
+      drawCanvas();
+    }
   });
 
   window.addEventListener('mouseup', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    if (cropRect.width < 10 || cropRect.height < 10) {
-      cropRect = { x: 0, y: 0, width: img.width, height: img.height };
-      drawCanvas();
+    if (isPanning) {
+      isPanning = false;
+      canvas.style.cursor = currentMode === 'pan' ? 'grab' : 'crosshair';
     }
-    updateFileInfo();
+    if (isDragging) {
+      isDragging = false;
+      if (cropRect.width < 10 || cropRect.height < 10) {
+        cropRect = { x: 0, y: 0, width: img.width, height: img.height };
+        drawCanvas();
+      }
+      updateFileInfo();
+    }
   });
 
+  // Touch Events for Mobile Pinch & Crop/Pan
   canvas.addEventListener('touchstart', (e) => {
-    isDragging = true;
-    const coords = getCanvasCoords(e);
-    startX = coords.x;
-    startY = coords.y;
-    cropRect = { x: startX, y: startY, width: 0, height: 0 };
+    if (e.touches.length === 2) {
+      // Pinch start
+      initialPinchDistance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      initialScale = scale;
+      isDragging = false;
+      isPanning = false;
+    } else if (e.touches.length === 1) {
+      if (currentMode === 'pan') {
+        isPanning = true;
+        startPanX = e.touches[0].clientX - panX;
+        startPanY = e.touches[0].clientY - panY;
+      } else {
+        isDragging = true;
+        const coords = getCanvasCoords(e);
+        startX = coords.x;
+        startY = coords.y;
+        cropRect = { x: startX, y: startY, width: 0, height: 0 };
+      }
+    }
     e.preventDefault();
-  });
+  }, { passive: false });
 
   canvas.addEventListener('touchmove', (e) => {
-    if (!isDragging) return;
-    const coords = getCanvasCoords(e);
-    endX = coords.x;
-    endY = coords.y;
+    if (e.touches.length === 2 && initialPinchDistance !== null) {
+      // Pinch zoom
+      const currentDistance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = currentDistance / initialPinchDistance;
+      scale = Math.min(Math.max(initialScale * factor, 0.5), 5);
+      updateCanvasTransform();
+    } else if (e.touches.length === 1) {
+      if (isPanning) {
+        panX = e.touches[0].clientX - startPanX;
+        panY = e.touches[0].clientY - startPanY;
+        updateCanvasTransform();
+      } else if (isDragging) {
+        const coords = getCanvasCoords(e);
+        endX = coords.x;
+        endY = coords.y;
 
-    let x = Math.min(startX, endX);
-    let y = Math.min(startY, endY);
-    let width = Math.abs(endX - startX);
-    let height = Math.abs(endY - startY);
+        let x = Math.min(startX, endX);
+        let y = Math.min(startY, endY);
+        let width = Math.abs(endX - startX);
+        let height = Math.abs(endY - startY);
 
-    x = Math.max(0, Math.min(x, canvas.width));
-    y = Math.max(0, Math.min(y, canvas.height));
-    width = Math.min(width, canvas.width - x);
-    height = Math.min(height, canvas.height - y);
+        x = Math.max(0, Math.min(x, canvas.width));
+        y = Math.max(0, Math.min(y, canvas.height));
+        width = Math.min(width, canvas.width - x);
+        height = Math.min(height, canvas.height - y);
 
-    cropRect = { x, y, width, height };
-    drawCanvas();
-    e.preventDefault();
-  });
-
-  window.addEventListener('touchend', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    if (cropRect.width < 10 || cropRect.height < 10) {
-      cropRect = { x: 0, y: 0, width: img.width, height: img.height };
-      drawCanvas();
+        cropRect = { x, y, width, height };
+        drawCanvas();
+      }
     }
-    updateFileInfo();
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+      initialPinchDistance = null;
+    }
+    if (isPanning) {
+      isPanning = false;
+    }
+    if (isDragging) {
+      isDragging = false;
+      if (cropRect.width < 10 || cropRect.height < 10) {
+        cropRect = { x: 0, y: 0, width: img.width, height: img.height };
+        drawCanvas();
+      }
+      updateFileInfo();
+    }
   });
 
   qualityRange.addEventListener('input', (e) => {
@@ -264,6 +373,10 @@ document.addEventListener('DOMContentLoaded', () => {
     dropzone.classList.remove('hidden');
     fileInput.value = '';
     originalFile = null;
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    updateCanvasTransform();
   });
 
   function updateFileInfo() {

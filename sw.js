@@ -1,4 +1,4 @@
-const CACHE_NAME = 'webp-converter-v3';
+const CACHE_NAME = 'webp-converter-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -52,7 +52,6 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // 共有ターゲット (POST) からのリクエスト処理
   if (e.request.method === 'POST' && (url.pathname.endsWith('index.html') || url.pathname.endsWith('/'))) {
     e.respondWith(
       (async () => {
@@ -65,7 +64,6 @@ self.addEventListener('fetch', (e) => {
             const store = tx.objectStore(STORE_NAME);
             store.put({ id: 'latestShared', file: file, timestamp: Date.now() });
 
-            // 各クライアントに通知
             const allClients = await clients.matchAll({ type: 'window' });
             for (const client of allClients) {
               client.postMessage({
@@ -83,7 +81,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 通常のキャッシュファースト戦略
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       return cachedResponse || fetch(e.request);
