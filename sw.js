@@ -1,4 +1,4 @@
-const CACHE_NAME = 'image-editor-v3';
+const CACHE_NAME = 'image-editor-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -60,7 +60,11 @@ self.addEventListener('fetch', (e) => {
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open('ImageEditorDB', 1);
-        req.onupgradeneeded = e => e.target.result.createObjectStore('sharedImages', { keyPath: 'id' });
+        req.onupgradeneeded = e => {
+            if (!e.target.result.objectStoreNames.contains('sharedImages')) {
+                e.target.result.createObjectStore('sharedImages', { keyPath: 'id' });
+            }
+        };
         req.onsuccess = e => resolve(e.target.result);
         req.onerror = e => reject(e.target.error);
     });

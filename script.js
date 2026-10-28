@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const imageCanvas = document.getElementById('imageCanvas');
+    if (!imageCanvas) return;
     const ctx = imageCanvas.getContext('2d');
     const imageInput = document.getElementById('imageInput');
     const selectImageButton = document.getElementById('selectImageButton');
@@ -39,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navigator.serviceWorker.register('/sw.js')
                 .then(registration => {
                     navigator.serviceWorker.addEventListener('message', event => {
-                        if (event.data.type === 'shared-image' && event.data.file) {
+                        if (event.data && event.data.type === 'shared-image' && event.data.file) {
                             displayImage(event.data.file);
                         }
                     });
@@ -55,7 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function openDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, 1);
-            request.onupgradeneeded = e => e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            request.onupgradeneeded = e => {
+                if (!e.target.result.objectStoreNames.contains(STORE_NAME)) {
+                    e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
             request.onsuccess = e => resolve(e.target.result);
             request.onerror = e => reject(e.target.error);
         });
@@ -93,25 +98,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${y}${m}${d}_${h}${min}${s}`;
     }
 
-    selectImageButton.addEventListener('click', () => imageInput.click());
+    if (selectImageButton && imageInput) {
+        selectImageButton.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) displayImage(file);
+            else showMessage('有効な画像を選択してください。', 'error');
+        });
+    }
 
-    imageInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file && file.type.startsWith('image/')) displayImage(file);
-        else showMessage('有効な画像を選択してください。', 'error');
-    });
+    if (imageArea) {
+        imageArea.addEventListener('dragover', e => e.preventDefault());
+        imageArea.addEventListener('drop', e => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) displayImage(file);
+        });
+    }
 
-    imageArea.addEventListener('dragover', e => e.preventDefault());
-    imageArea.addEventListener('drop', e => {
-        e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) displayImage(file);
-    });
-
-    webpQuality.addEventListener('input', () => {
-        webpQualityValue.textContent = webpQuality.value;
-        updateCurrentBlob();
-    });
+    if (webpQuality && webpQualityValue) {
+        webpQuality.addEventListener('input', () => {
+            webpQualityValue.textContent = webpQuality.value;
+            updateCurrentBlob();
+        });
+    }
 
     const showOriginal = () => {
         if (!originalImage) return;
@@ -124,82 +134,94 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCurrentBlob();
     };
 
-    compareButton.addEventListener('mousedown', showOriginal);
-    compareButton.addEventListener('mouseup', hideOriginal);
-    compareButton.addEventListener('mouseleave', hideOriginal);
-    compareButton.addEventListener('touchstart', (e) => { e.preventDefault(); showOriginal(); });
-    compareButton.addEventListener('touchend', (e) => { e.preventDefault(); hideOriginal(); });
+    if (compareButton) {
+        compareButton.addEventListener('mousedown', showOriginal);
+        compareButton.addEventListener('mouseup', hideOriginal);
+        compareButton.addEventListener('mouseleave', hideOriginal);
+        compareButton.addEventListener('touchstart', (e) => { e.preventDefault(); showOriginal(); }, { passive: false });
+        compareButton.addEventListener('touchend', (e) => { e.preventDefault(); hideOriginal(); });
+    }
 
-    canvasContainer.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        scale += e.deltaY * -0.001;
-        scale = Math.min(Math.max(0.5, scale), 5.0);
-        imageCanvas.style.transform = `scale(${scale})`;
-    }, { passive: false });
+    if (canvasContainer) {
+        canvasContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            scale += e.deltaY * -0.001;
+            scale = Math.min(Math.max(0.5, scale), 5.0);
+            imageCanvas.style.transform = `scale(${scale})`;
+        }, { passive: false });
+    }
 
-    resetButton.addEventListener('click', () => {
-        if (!originalImage) return;
-        scale = 1.0;
-        imageCanvas.style.transform = `scale(${scale})`;
-        imageCanvas.width = originalImage.width;
-        imageCanvas.height = originalImage.height;
-        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        ctx.drawImage(originalImage, 0, 0);
-        updateCurrentBlob();
-        showMessage('画像をリセットしました。');
-    });
+    if (resetButton) {
+        resetButton.addEventListener('click', () => {
+            if (!originalImage) return;
+            scale = 1.0;
+            imageCanvas.style.transform = `scale(${scale})`;
+            imageCanvas.width = originalImage.width;
+            imageCanvas.height = originalImage.height;
+            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            ctx.drawImage(originalImage, 0, 0);
+            updateCurrentBlob();
+            showMessage('画像をリセットしました。');
+        });
+    }
 
-    trimButton.addEventListener('click', () => {
-        if (!originalImage) return;
-        enterCropMode();
-    });
+    if (trimButton) {
+        trimButton.addEventListener('click', () => {
+            if (!originalImage) return;
+            enterCropMode();
+        });
+    }
 
-    maskButton.addEventListener('click', () => {
-        if (!originalImage) return;
-        showLoading('マスキング中...');
+    if (maskButton) {
+        maskButton.addEventListener('click', () => {
+            if (!originalImage) return;
+            showLoading('マスキング中...');
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = imageCanvas.width;
-        tempCanvas.height = imageCanvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = imageCanvas.width;
+            tempCanvas.height = imageCanvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
 
-        tempCtx.drawImage(imageCanvas, 0, 0);
-        tempCtx.globalCompositeOperation = 'destination-in';
-        tempCtx.beginPath();
-        const cx = tempCanvas.width / 2;
-        const cy = tempCanvas.height / 2;
-        const r = Math.min(cx, cy) * 0.85;
-        tempCtx.arc(cx, cy, r, 0, Math.PI * 2);
-        tempCtx.fill();
+            tempCtx.drawImage(imageCanvas, 0, 0);
+            tempCtx.globalCompositeOperation = 'destination-in';
+            tempCtx.beginPath();
+            const cx = tempCanvas.width / 2;
+            const cy = tempCanvas.height / 2;
+            const r = Math.min(cx, cy) * 0.85;
+            tempCtx.arc(cx, cy, r, 0, Math.PI * 2);
+            tempCtx.fill();
 
-        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        ctx.drawImage(tempCanvas, 0, 0);
-        updateCurrentBlob();
-        hideLoading();
-        showMessage('画像を円形にマスキングしました。');
-    });
+            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            ctx.drawImage(tempCanvas, 0, 0);
+            updateCurrentBlob();
+            hideLoading();
+            showMessage('画像を円形にマスキングしました。');
+        });
+    }
 
-    saveButton.addEventListener('click', () => {
-        if (!currentImageBlob) {
-            showMessage('保存する画像がありません。', 'error');
-            return;
-        }
-        const customName = outputFilename.value.trim() || generateDefaultFilename();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(currentImageBlob);
-        a.download = `${customName}.webp`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-        showMessage('WebP画像を保存しました！');
-    });
+    if (saveButton) {
+        saveButton.addEventListener('click', () => {
+            if (!currentImageBlob) {
+                showMessage('保存する画像がありません。', 'error');
+                return;
+            }
+            const customName = (outputFilename && outputFilename.value.trim()) || generateDefaultFilename();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(currentImageBlob);
+            a.download = `${customName}.webp`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            showMessage('WebP画像を保存しました！');
+        });
+    }
 
-    if (navigator.share) {
+    if (navigator.share && shareButton) {
         shareButton.removeAttribute('disabled');
         shareButton.addEventListener('click', async () => {
             if (!currentImageBlob) return;
-            const customName = outputFilename.value.trim() || generateDefaultFilename();
+            const customName = (outputFilename && outputFilename.value.trim()) || generateDefaultFilename();
             const file = new File([currentImageBlob], `${customName}.webp`, { type: 'image/webp' });
             try {
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -215,16 +237,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showMessage(msg) {
-        messageDisplay.textContent = msg;
+        if (messageDisplay) messageDisplay.textContent = msg;
     }
 
     function showLoading(msg = '処理中...') {
-        loadingOverlay.querySelector('p').textContent = msg;
-        loadingOverlay.classList.remove('hidden');
+        if (loadingOverlay) {
+            const p = loadingOverlay.querySelector('p');
+            if (p) p.textContent = msg;
+            loadingOverlay.classList.remove('hidden');
+        }
     }
 
     function hideLoading() {
-        loadingOverlay.classList.add('hidden');
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
     }
 
     function displayImage(fileOrUrl) {
@@ -249,17 +274,19 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.drawImage(img, 0, 0, w, h);
 
             imageCanvas.classList.remove('hidden');
-            uploadPrompt.classList.add('hidden');
-            controls.classList.remove('hidden');
-            fileInfoArea.classList.remove('hidden');
+            if (uploadPrompt) uploadPrompt.classList.add('hidden');
+            if (controls) controls.classList.remove('hidden');
+            if (fileInfoArea) fileInfoArea.classList.remove('hidden');
 
-            if (fileOrUrl instanceof File) {
-                fileNameDisplay.textContent = fileOrUrl.name;
-            } else {
-                fileNameDisplay.textContent = 'shared_image.webp';
+            if (fileNameDisplay) {
+                if (fileOrUrl instanceof File) {
+                    fileNameDisplay.textContent = fileOrUrl.name;
+                } else {
+                    fileNameDisplay.textContent = 'shared_image.webp';
+                }
             }
 
-            outputFilename.value = generateDefaultFilename();
+            if (outputFilename) outputFilename.value = generateDefaultFilename();
             updateCurrentBlob();
             hideLoading();
             showMessage('画像を読み込みました。');
@@ -277,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCurrentBlob() {
+        if (!webpQuality) return;
         const quality = parseInt(webpQuality.value, 10) / 100;
         imageCanvas.toBlob(blob => {
             currentImageBlob = blob;
@@ -284,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function enterCropMode() {
+        if (!cropOverlay) return;
         cropOverlay.classList.remove('hidden');
 
         const rect = imageCanvas.getBoundingClientRect();
@@ -303,6 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exitCropMode() {
+        if (!cropOverlay) return;
         cropOverlay.classList.add('hidden');
         cropOverlay.removeEventListener('mousedown', startCrop);
         cropOverlay.removeEventListener('mousemove', moveCrop);
@@ -313,6 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCropRectStyle() {
+        if (!cropRect) return;
         cropRect.style.width = `${cropRectWidth}px`;
         cropRect.style.height = `${cropRectHeight}px`;
         cropRect.style.left = `${cropRectX}px`;
@@ -324,12 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const touch = e.touches ? e.touches[0] : e;
         cropStartX = touch.clientX - cropRectX;
         cropStartY = touch.clientY - cropRectY;
-        cropRect.dataset.dragging = 'true';
+        if (cropRect) cropRect.dataset.dragging = 'true';
     }
 
     function moveCrop(e) {
         e.preventDefault();
-        if (cropRect.dataset.dragging !== 'true') return;
+        if (!cropRect || cropRect.dataset.dragging !== 'true') return;
         const touch = e.touches ? e.touches[0] : e;
         cropRectX = touch.clientX - cropStartX;
         cropRectY = touch.clientY - cropStartY;
@@ -337,40 +368,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endCrop() {
-        delete cropRect.dataset.dragging;
+        if (cropRect) delete cropRect.dataset.dragging;
     }
 
-    applyCropButton.addEventListener('click', () => {
-        showLoading('トリミング適用中...');
-        exitCropMode();
+    if (applyCropButton) {
+        applyCropButton.addEventListener('click', () => {
+            showLoading('トリミング適用中...');
+            exitCropMode();
 
-        const canvasRect = imageCanvas.getBoundingClientRect();
-        const scaleX = imageCanvas.width / canvasRect.width;
-        const scaleY = imageCanvas.height / canvasRect.height;
+            const canvasRect = imageCanvas.getBoundingClientRect();
+            const scaleX = imageCanvas.width / canvasRect.width;
+            const scaleY = imageCanvas.height / canvasRect.height;
 
-        const sx = cropRectX * scaleX;
-        const sy = cropRectY * scaleY;
-        const sw = cropRectWidth * scaleX;
-        const sh = cropRectHeight * scaleY;
+            const sx = cropRectX * scaleX;
+            const sy = cropRectY * scaleY;
+            const sw = cropRectWidth * scaleX;
+            const sh = cropRectHeight * scaleY;
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = sw;
-        tempCanvas.height = sh;
-        const tCtx = tempCanvas.getContext('2d');
-        tCtx.drawImage(imageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sw;
+            tempCanvas.height = sh;
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx.drawImage(imageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        imageCanvas.width = sw;
-        imageCanvas.height = sh;
-        ctx.clearRect(0, 0, sw, sh);
-        ctx.drawImage(tempCanvas, 0, 0);
+            imageCanvas.width = sw;
+            imageCanvas.height = sh;
+            ctx.clearRect(0, 0, sw, sh);
+            ctx.drawImage(tempCanvas, 0, 0);
 
-        updateCurrentBlob();
-        hideLoading();
-        showMessage('トリミングを適用しました。');
-    });
+            updateCurrentBlob();
+            hideLoading();
+            showMessage('トリミングを適用しました。');
+        });
+    }
 
-    cancelCropButton.addEventListener('click', () => {
-        exitCropMode();
-        showMessage('トリミングをキャンセルしました。');
-    });
+    if (cancelCropButton) {
+        cancelCropButton.addEventListener('click', () => {
+            exitCropMode();
+            showMessage('トリミングをキャンセルしました。');
+        });
+    }
 });
