@@ -1,21 +1,21 @@
 {
     "name": "PWA 画像エディタ",
     "short_name": "画像エディタ",
-    "description": "共有から画像を受け取り、WebP変換、トリミング、マスキングが可能なPWA",
-    "start_url": "/",
+    "description": "トリミング、マスキング、WebP変換が可能な高機能画像編集PWA",
+    "start_url": "./",
     "display": "standalone",
-    "background_color": "#ffffff",
+    "background_color": "#f8fafc",
     "theme_color": "#4285F4",
     "icons": [
         {
-            "src": "/icon.svg",
+            "src": "icon.svg",
             "sizes": "512x512",
             "type": "image/svg+xml",
             "purpose": "any maskable"
         }
     ],
     "share_target": {
-        "action": "/",
+        "action": "./",
         "method": "POST",
         "enctype": "multipart/form-data",
         "params": {

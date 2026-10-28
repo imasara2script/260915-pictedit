@@ -3,81 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PWA画像エディタ</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="stylesheet" href="/styles.css">
+    <title>PWA 画像エディタ</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
     <meta name="theme-color" content="#4285F4">
-    <meta name="description" content="共有から画像を受け取り編集するPWA">
+    <meta name="description" content="トリミング、マスキング、WebP変換ができる高機能画像編集PWA">
 </head>
 <body>
-    <div class="container">
-        <h1>PWA 画像エディタ</h1>
+    <div class="app-container">
+        <header>
+            <h1>PWA 画像エディタ</h1>
+        </header>
 
-        <div id="loading" class="loading-overlay hidden">
+        <!-- ローディングオーバーレイ -->
+        <div id="loadingOverlay" class="overlay hidden">
             <div class="spinner"></div>
-            <p>処理中...</p>
+            <p id="loadingText">処理中...</p>
         </div>
 
-        <div class="file-info-area hidden" id="fileInfoArea">
-            <span>選択中のファイル: <strong id="fileNameDisplay">-</strong></span>
-        </div>
-
-        <div class="image-area">
-            <div class="canvas-container" id="canvasContainer">
-                <canvas id="imageCanvas" class="hidden"></canvas>
+        <!-- トリミングオーバーレイ -->
+        <div id="cropOverlay" class="overlay hidden">
+            <div class="crop-instruction">トリミング範囲をドラッグで調整してください</div>
+            <div id="cropBox" class="crop-box">
+                <div class="handle nw"></div>
+                <div class="handle ne"></div>
+                <div class="handle sw"></div>
+                <div class="handle se"></div>
             </div>
-            <div id="uploadPrompt" class="upload-prompt">
-                <p id="dropZoneText">画像をここにドラッグ＆ドロップ、またはファイルを選択してください。</p>
-                <input type="file" id="imageInput" accept="image/*" class="hidden">
-                <button id="selectImageButton" class="main-button">画像を選択</button>
-            </div>
-        </div>
-
-        <div id="controls" class="controls-group hidden">
-            <div class="editor-section">
-                <h2>プレビュー切替</h2>
-                <div class="button-group">
-                    <button id="compareButton" class="action-button preview-btn">元画像を表示 (長押し中)</button>
-                </div>
-            </div>
-
-            <div class="editor-section">
-                <h2>編集</h2>
-                <div class="button-group">
-                    <button id="trimButton" class="action-button">トリミング</button>
-                    <button id="maskButton" class="action-button">マスキング</button>
-                    <button id="resetButton" class="action-button danger-btn">リセット</button>
-                </div>
-            </div>
-
-            <div class="editor-section">
-                <h2>WebP設定 & 出力</h2>
-                <div class="slider-group">
-                    <label for="webpQuality">画質: <span id="webpQualityValue">80</span>%</label>
-                    <input type="range" id="webpQuality" min="1" max="100" value="80">
-                </div>
-                <div class="input-group">
-                    <label for="outputFilename">ファイル名 (拡張子なし)</label>
-                    <input type="text" id="outputFilename" placeholder="自動設定されます">
-                </div>
-                <div class="button-group" style="margin-top: 15px;">
-                    <button id="saveButton" class="action-button primary-action">ファイルを保存</button>
-                    <button id="shareButton" class="action-button" disabled>共有</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="cropOverlay" class="crop-overlay hidden">
-            <div id="cropRect" class="crop-rect"></div>
             <div class="crop-actions">
-                <button id="applyCropButton" class="crop-button">トリミング適用</button>
-                <button id="cancelCropButton" class="crop-button cancel">キャンセル</button>
+                <button id="applyCropBtn" class="btn primary">適用</button>
+                <button id="cancelCropBtn" class="btn secondary">キャンセル</button>
             </div>
         </div>
 
-        <p id="message" class="message"></p>
+        <!-- メインコンテンツ -->
+        <main>
+            <!-- 未選択時のアップロードエリア -->
+            <div id="uploadArea" class="upload-area">
+                <div class="upload-content">
+                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64"><path fill="none" d="M0 0h24v24H0z"/><path d="M16 13l-4-4-4 4h3v4h2v-4h3zM5 19h14v2H5v-2zM5 5h14v2H5V5z" fill="#4285F4"/></svg>
+                    <p>画像をドラッグ＆ドロップ、または選択</p>
+                    <button id="selectFileBtn" class="btn primary">ファイルを選択</button>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+                </div>
+            </div>
+
+            <!-- 画像編集・表示エリア -->
+            <div id="editorArea" class="editor-area hidden">
+                <div class="file-badge">
+                    <span>ファイル: <strong id="fileNameDisplay">image.webp</strong></span>
+                </div>
+
+                <div id="canvasContainer" class="canvas-container">
+                    <canvas id="imageCanvas"></canvas>
+                </div>
+
+                <div class="editor-toolbar">
+                    <button id="compareBtn" class="btn info">元画像を表示 (長押し)</button>
+                    <button id="zoomInBtn" class="btn icon-btn" title="拡大">+</button>
+                    <button id="zoomOutBtn" class="btn icon-btn" title="縮小">-</button>
+                </div>
+
+                <div class="controls-panel">
+                    <div class="control-section">
+                        <h3>編集ツール</h3>
+                        <div class="btn-group">
+                            <button id="trimBtn" class="btn">トリミング</button>
+                            <button id="maskBtn" class="btn">丸型マスキング</button>
+                            <button id="resetBtn" class="btn danger">リセット</button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>WebP 出力設定</h3>
+                        <div class="slider-group">
+                            <label for="qualityRange">画質: <span id="qualityVal">80</span>%</label>
+                            <input type="range" id="qualityRange" min="1" max="100" value="80">
+                        </div>
+                        <div class="input-group">
+                            <label for="filenameInput">出力ファイル名 (拡張子なし)</label>
+                            <input type="text" id="filenameInput" placeholder="自動設定">
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button id="saveBtn" class="btn success">ファイルを保存</button>
+                        <button id="shareBtn" class="btn primary" disabled>共有</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="toast" class="toast hidden"></div>
     </div>
 
-    <script src="/script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
