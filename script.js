@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const ctx = canvas.getContext('2d');
   const qualityRange = document.getElementById('qualityRange');
   const qualityVal = document.getElementById('qualityVal');
+  const zoomRange = document.getElementById('zoomRange');
+  const zoomVal = document.getElementById('zoomVal');
   const resetBtn = document.getElementById('resetBtn');
   const convertBtn = document.getElementById('convertBtn');
   const fileInfo = document.getElementById('fileInfo');
@@ -172,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     panY = 0;
     cropRect = { x: 0, y: 0, width: img.width, height: img.height };
     
+    updateZoomUI();
     updateCanvasTransform();
     drawCanvas();
     updateFileInfo();
@@ -179,6 +182,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateCanvasTransform() {
     canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  }
+
+  function updateZoomUI() {
+    zoomRange.value = Math.round(scale * 100);
+    zoomVal.textContent = zoomRange.value;
   }
 
   function drawCanvas() {
@@ -223,8 +231,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       scale = Math.max(scale * (1 - zoomIntensity), 0.5);
     }
+    updateZoomUI();
     updateCanvasTransform();
   }, { passive: false });
+
+  // Zoom range input handler
+  zoomRange.addEventListener('input', (e) => {
+    scale = parseInt(e.target.value) / 100;
+    zoomVal.textContent = e.target.value;
+    updateCanvasTransform();
+  });
 
   // Pointer / Touch Events handling
   canvas.addEventListener('mousedown', (e) => {
@@ -318,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       const factor = currentDistance / initialPinchDistance;
       scale = Math.min(Math.max(initialScale * factor, 0.5), 5);
+      updateZoomUI();
       updateCanvasTransform();
     } else if (e.touches.length === 1) {
       if (isPanning) {
@@ -376,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scale = 1;
     panX = 0;
     panY = 0;
+    updateZoomUI();
     updateCanvasTransform();
   });
 
