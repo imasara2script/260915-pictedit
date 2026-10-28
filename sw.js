@@ -1,4 +1,4 @@
-const CACHE_NAME = 'image-editor-v5';
+const CACHE_NAME = 'image-editor-v6';
 const ASSETS = [
     './',
     './index.html',
@@ -28,23 +28,29 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
-    if (e.request.method === 'POST' && url.pathname === new URL(location.href).pathname) {
+    
+    // Handle share target POST request
+    if (e.request.method === 'POST') {
         e.respondWith(
             (async () => {
-                const formData = await e.request.formData();
-                const file = formData.get('image');
-                if (file) {
-                    const db = await openDB();
-                    const tx = db.transaction('sharedImages', 'readwrite');
-                    tx.objectStore('sharedImages').put({ id: 'latestShared', file: file });
-                    await new Promise(resolve => { tx.oncomplete = resolve; });
+                try {
+                    const formData = await e.request.formData();
+                    const file = formData.get('image');
+                    if (file) {
+                        const db = await openDB();
+                        const tx = db.transaction('sharedImages', 'readwrite');
+                        tx.objectStore('sharedImages').put({ id: 'latestShared', file: file });
+                        await new Promise(resolve => { tx.oncomplete = resolve; });
 
-                    const clientList = await clients.matchAll({ type: 'window' });
-                    for (const client of clientList) {
-                        client.postMessage({ type: 'shared-image', file: file });
+                        const clientList = await clients.matchAll({ type: 'window' });
+                        for (const client of clientList) {
+                            client.postMessage({ type: 'shared-image', file: file });
+                        }
                     }
+                } catch (err) {
+                    console.error('Error handling share target:', err);
                 }
-                return Response.redirect('./', 303);
+                return Response.redirect('./index.html', 303);
             })()
         );
         return;

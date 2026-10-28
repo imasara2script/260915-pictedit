@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     const trimBtn = document.getElementById('trimBtn');
     const maskBtn = document.getElementById('maskBtn');
-    const resetButton = document.getElementById('resetButton');
+    const resetBtn = document.getElementById('resetBtn');
     const qualityRange = document.getElementById('qualityRange');
     const qualityVal = document.getElementById('qualityVal');
     const filenameInput = document.getElementById('filenameInput');
@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
             req.onsuccess = (e) => {
                 if (e.target.result && e.target.result.file) {
                     loadImageFile(e.target.result.file);
+                    // Clear after loading
+                    const delTx = db.transaction('sharedImages', 'readwrite');
+                    delTx.objectStore('sharedImages').delete('latestShared');
                 }
             };
         } catch (err) {
@@ -121,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadImageFile(file) {
         showLoading('画像を読み込み中...');
-        originalFileName = file.name.substring(0, file.name.lastIndexOf('.')) || 'image';
+        originalFileName = file.name ? (file.name.substring(0, file.name.lastIndexOf('.')) || 'image') : 'image';
 
         const reader = new FileReader();
         reader.onload = e => {
@@ -131,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentScale = 1.0;
                 imageCanvas.style.transform = `scale(${currentScale})`;
 
-                // Set canvas size (max 1600px for performance)
                 let w = img.width;
                 let h = img.height;
                 const maxDim = 1600;
@@ -147,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 uploadArea.classList.add('hidden');
                 editorArea.classList.remove('hidden');
-                fileNameDisplay.textContent = file.name;
+                fileNameDisplay.textContent = file.name || 'shared_image.webp';
                 filenameInput.value = generateDefaultFilename();
 
                 updateBlob();
@@ -159,7 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     }
 
-    // Update WebP Blob based on canvas & quality
     function updateBlob() {
         const quality = parseInt(qualityRange.value, 10) / 100;
         qualityVal.textContent = qualityRange.value;
@@ -189,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const hideOrig = () => {
         if (!originalImage) return;
-        // Redraw current filtered state if needed, or simply reload from canvas state
         updateBlob();
     };
 
@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     compareBtn.addEventListener('touchend', (e) => { e.preventDefault(); hideOrig(); });
 
     // Reset
-    resetButton.addEventListener('click', () => {
+    resetBtn.addEventListener('click', () => {
         if (!originalImage) return;
         currentScale = 1.0;
         imageCanvas.style.transform = `scale(${currentScale})`;
