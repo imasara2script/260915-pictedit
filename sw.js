@@ -1,4 +1,4 @@
-const CACHE_NAME = 'webp-converter-v4';
+const CACHE_NAME = 'webp-converter-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -52,19 +52,32 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  if (e.request.method === 'POST' && (url.pathname.endsWith('index.html') || url.pathname.endsWith('/'))) {
+  if (
+    e.request.method === 'POST' &&
+    url.pathname.endsWith('share-target')
+  ) {
     e.respondWith(
       (async () => {
         try {
           const formData = await e.request.formData();
           const file = formData.get('image');
+
           if (file) {
             const db = await openDB();
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
-            store.put({ id: 'latestShared', file: file, timestamp: Date.now() });
 
-            const allClients = await clients.matchAll({ type: 'window' });
+            store.put({
+              id: 'latestShared',
+              file: file,
+              timestamp: Date.now()
+            });
+
+            const allClients = await clients.matchAll({
+              type: 'window',
+              includeUncontrolled: true
+            });
+
             for (const client of allClients) {
               client.postMessage({
                 type: 'shared-image',
@@ -75,9 +88,11 @@ self.addEventListener('fetch', (e) => {
         } catch (err) {
           console.error('Error handling shared target POST:', err);
         }
+
         return Response.redirect('./index.html', 303);
       })()
     );
+
     return;
   }
 

@@ -16,7 +16,7 @@
     }
   ],
   "share_target": {
-    "action": "./index.html",
+    "action": "./share-target",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -26,7 +26,12 @@
       "files": [
         {
           "name": "image",
-          "accept": ["image/*", "image/png", "image/jpeg", "image/webp"]
+          "accept": [
+            "image/*",
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
         }
       ]
     }
