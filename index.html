@@ -1,56 +1,81 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Image Cropper & WebP Converter</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2563eb">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA画像エディタ</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/styles.css">
+    <meta name="theme-color" content="#4285F4">
+    <meta name="description" content="共有から画像を受け取り編集するPWA">
 </head>
 <body>
-  <div class="container">
-    <h1>WebP トリミング・変換</h1>
+    <div class="container">
+        <h1>PWA 画像エディタ</h1>
 
-    <div id="dropzone" class="dropzone">
-      <p>ここに画像をドロップするか、<br>ファイルを選択してください</p>
-      <button class="btn" id="selectBtn">ファイルを選ぶ</button>
-      <input type="file" id="fileInput" accept="image/*">
+        <div id="loading" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p>処理中...</p>
+        </div>
+
+        <div class="file-info-area hidden" id="fileInfoArea">
+            <p>選択中のファイル: <span id="fileNameDisplay">-</span></p>
+        </div>
+
+        <div class="image-area">
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="imageCanvas" class="hidden"></canvas>
+            </div>
+            <p id="dropZoneText">画像をここにドラッグ＆ドロップ、またはファイルを選択してください。</p>
+            <input type="file" id="imageInput" accept="image/*" class="hidden">
+            <button id="selectImageButton" class="main-button">画像を選択</button>
+        </div>
+
+        <div id="controls" class="controls-group hidden">
+            <div class="editor-section">
+                <h2>プレビュー切替</h2>
+                <div class="button-group">
+                    <button id="compareButton" class="action-button preview-btn">元画像を表示 (長押し/押下中)</button>
+                </div>
+            </div>
+
+            <div class="editor-section">
+                <h2>編集</h2>
+                <div class="button-group">
+                    <button id="trimButton" class="action-button">トリミング</button>
+                    <button id="maskButton" class="action-button">マスキング</button>
+                    <button id="resetButton" class="action-button">リセット</button>
+                </div>
+            </div>
+
+            <div class="editor-section">
+                <h2>WebP設定 & 出力</h2>
+                <div class="slider-group">
+                    <label for="webpQuality">画質 (<span id="webpQualityValue">80</span>)</label>
+                    <input type="range" id="webpQuality" min="1" max="100" value="80">
+                </div>
+                <div class="input-group">
+                    <label for="outputFilename">ファイル名 (拡張子なし)</label>
+                    <input type="text" id="outputFilename" placeholder="自動設定されます">
+                </div>
+                <div class="button-group" style="margin-top: 15px;">
+                    <button id="saveButton" class="action-button">ファイルを保存</button>
+                    <button id="shareButton" class="action-button" disabled>共有</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="cropOverlay" class="crop-overlay hidden">
+            <div id="cropRect" class="crop-rect"></div>
+            <div class="crop-actions">
+                <button id="applyCropButton" class="crop-button">トリミング適用</button>
+                <button id="cancelCropButton" class="crop-button cancel">キャンセル</button>
+            </div>
+        </div>
+
+        <p id="message" class="message"></p>
     </div>
 
-    <div id="editorContainer" class="editor-container hidden">
-      <div class="mode-selector">
-        <button type="button" class="mode-btn active" id="modeCrop">トリミング</button>
-        <button type="button" class="mode-btn" id="modePan">移動・ズーム</button>
-      </div>
-
-      <div class="canvas-wrapper" id="canvasWrapper">
-        <canvas id="imageCanvas"></canvas>
-      </div>
-      
-      <div class="controls">
-        <div class="control-group">
-          <label for="qualityRange">画質 (WebP Quality): <span id="qualityVal">85</span>%</label>
-          <input type="range" id="qualityRange" min="1" max="100" value="85">
-        </div>
-        <div class="control-group">
-          <label for="zoomRange">拡大率 (Zoom): <span id="zoomVal">100</span>%</label>
-          <input type="range" id="zoomRange" min="50" max="500" value="100">
-        </div>
-        <div class="file-info" id="fileInfo">元のサイズ: - / 変換後予想: -</div>
-      </div>
-
-      <div class="actions">
-        <button class="btn btn-secondary" id="resetBtn">画像を変える</button>
-        <button class="btn" id="convertBtn">WebPとして保存</button>
-      </div>
-    </div>
-
-    <footer class="app-footer">
-      <span id="appVersion">Version: v1.3.0 (Build 2026-09-15)</span>
-    </footer>
-  </div>
-
-  <script src="script.js"></script>
+    <script src="/script.js"></script>
 </body>
 </html>

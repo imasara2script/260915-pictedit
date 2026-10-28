@@ -1,461 +1,394 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
-  const selectBtn = document.getElementById('selectBtn');
-  const editorContainer = document.getElementById('editorContainer');
-  const canvasWrapper = document.getElementById('canvasWrapper');
-  const canvas = document.getElementById('imageCanvas');
-  const ctx = canvas.getContext('2d');
-  const qualityRange = document.getElementById('qualityRange');
-  const qualityVal = document.getElementById('qualityVal');
-  const zoomRange = document.getElementById('zoomRange');
-  const zoomVal = document.getElementById('zoomVal');
-  const resetBtn = document.getElementById('resetBtn');
-  const convertBtn = document.getElementById('convertBtn');
-  const fileInfo = document.getElementById('fileInfo');
-  const modeCrop = document.getElementById('modeCrop');
-  const modePan = document.getElementById('modePan');
+    const imageCanvas = document.getElementById('imageCanvas');
+    const ctx = imageCanvas.getContext('2d');
+    const imageInput = document.getElementById('imageInput');
+    const selectImageButton = document.getElementById('selectImageButton');
+    const dropZoneText = document.getElementById('dropZoneText');
+    const controls = document.getElementById('controls');
+    const webpQuality = document.getElementById('webpQuality');
+    const webpQualityValue = document.getElementById('webpQualityValue');
+    const trimButton = document.getElementById('trimButton');
+    const maskButton = document.getElementById('maskButton');
+    const resetButton = document.getElementById('resetButton');
+    const saveButton = document.getElementById('saveButton');
+    const shareButton = document.getElementById('shareButton');
+    const messageDisplay = document.getElementById('message');
+    const loadingOverlay = document.getElementById('loading');
+    const imageArea = document.querySelector('.image-area');
+    const canvasContainer = document.getElementById('canvasContainer');
+    const fileInfoArea = document.getElementById('fileInfoArea');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const outputFilename = document.getElementById('outputFilename');
+    const compareButton = document.getElementById('compareButton');
 
-  let img = new Image();
-  let originalFile = null;
-  
-  // App mode: 'crop' or 'pan'
-  let currentMode = 'crop';
+    // トリミング用DOM
+    const cropOverlay = document.getElementById('cropOverlay');
+    const cropRect = document.getElementById('cropRect');
+    const applyCropButton = document.getElementById('applyCropButton');
+    const cancelCropButton = document.getElementById('cancelCropButton');
 
-  // Transform state for Pan/Zoom
-  let scale = 1;
-  let panX = 0;
-  let panY = 0;
-  let isPanning = false;
-  let startPanX = 0;
-  let startPanY = 0;
+    let originalImage = null; // 常にオリジナルのImage
+    let currentImageBlob = null;
+    let originalFileObject = null;
+    let scale = 1.0;
+    let isCropping = false;
+    let cropStartX, cropStartY;
+    let cropRectX, cropRectY, cropRectWidth, cropRectHeight;
 
-  // Pinch zoom variables
-  let initialPinchDistance = null;
-  let initialScale = 1;
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    navigator.serviceWorker.addEventListener('message', event => {
+                        if (event.data.type === 'shared-image' && event.data.file) {
+                            displayImage(event.data.file);
+                        }
+                    });
+                })
+                .catch(err => console.error('SW registration error:', err));
+        });
+    }
 
-  // Crop state variables
-  let isDragging = false;
-  let startX, startY, endX, endY;
-  let cropRect = { x: 0, y: 0, width: 0, height: 0 };
+    // IndexedDB for Shared Images
+    const DB_NAME = 'ImageEditorDB';
+    const STORE_NAME = 'sharedImages';
 
-  // Mode switching
-  modeCrop.addEventListener('click', () => {
-    currentMode = 'crop';
-    modeCrop.classList.add('active');
-    modePan.classList.remove('active');
-    canvas.style.cursor = 'crosshair';
-  });
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = e => e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            request.onsuccess = e => resolve(e.target.result);
+            request.onerror = e => reject(e.target.error);
+        });
+    }
 
-  modePan.addEventListener('click', () => {
-    currentMode = 'pan';
-    modePan.classList.add('active');
-    modeCrop.classList.remove('active');
-    canvas.style.cursor = 'grab';
-  });
-
-  // Register Service Worker for PWA
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').then(reg => {
-        console.log('ServiceWorker registration successful', reg.scope);
-      }).catch(err => {
-        console.log('ServiceWorker registration failed: ', err);
-      });
-    });
-
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'shared-image' && event.data.file) {
-        loadImageFile(event.data.file);
-      }
-    });
-  }
-
-  checkIndexedDBForSharedImage();
-
-  async function checkIndexedDBForSharedImage() {
-    try {
-      const db = await openDB();
-      const tx = db.transaction('sharedImages', 'readonly');
-      const store = tx.objectStore('sharedImages');
-      const request = store.get('latestShared');
-      request.onsuccess = () => {
-        if (request.result && request.result.file) {
-          if (Date.now() - request.result.timestamp < 60000) {
-            loadImageFile(request.result.file);
-            clearSharedImage();
-          }
+    async function getLatestImageFromDB() {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.get('latestShared');
+            return new Promise(resolve => {
+                req.onsuccess = e => resolve(e.target.result ? e.target.result.file : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch {
+            return null;
         }
-      };
-    } catch (e) {
-      console.log('No shared image in DB or DB error:', e);
     }
-  }
 
-  function clearSharedImage() {
-    indexedDB.open('ImageEditorDB', 1).onsuccess = (e) => {
-      const db = e.target.result;
-      const tx = db.transaction('sharedImages', 'readwrite');
-      tx.objectStore('sharedImages').delete('latestShared');
+    async function checkSharedImage() {
+        const file = await getLatestImageFromDB();
+        if (file) displayImage(file);
+    }
+    checkSharedImage();
+
+    // デフォルトファイル名生成 (年月日 時分秒)
+    function generateDefaultFilename() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const h = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        return `${y}${m}${d}_${h}${min}${s}`;
+    }
+
+    // イベントリスナー
+    selectImageButton.addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) displayImage(file);
+        else showMessage('有効な画像を選択してください。', 'error');
+    });
+
+    imageArea.addEventListener('dragover', e => e.preventDefault());
+    imageArea.addEventListener('drop', e => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) displayImage(file);
+    });
+
+    webpQuality.addEventListener('input', () => {
+        webpQualityValue.textContent = webpQuality.value;
+        updateCurrentBlob();
+    });
+
+    // 比較ボタン (押している間元画像を表示)
+    const showOriginal = () => {
+        if (!originalImage) return;
+        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+        ctx.drawImage(originalImage, 0, 0, imageCanvas.width, imageCanvas.height);
     };
-  }
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('ImageEditorDB', 1);
-      request.onupgradeneeded = event => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains('sharedImages')) {
-          db.createObjectStore('sharedImages', { keyPath: 'id' });
+    const hideOriginal = () => {
+        if (!originalImage) return;
+        updateCurrentBlob(); // 再描画
+    };
+
+    compareButton.addEventListener('mousedown', showOriginal);
+    compareButton.addEventListener('mouseup', hideOriginal);
+    compareButton.addEventListener('mouseleave', hideOriginal);
+    compareButton.addEventListener('touchstart', (e) => { e.preventDefault(); showOriginal(); });
+    compareButton.addEventListener('touchend', (e) => { e.preventDefault(); hideOriginal(); });
+
+    // ズーム・パン (拡大縮小操作)
+    canvasContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        scale += e.deltaY * -0.001;
+        scale = Math.min(Math.max(0.5, scale), 5.0);
+        imageCanvas.style.transform = `scale(${scale})`;
+    }, { passive: false });
+
+    // リセット
+    resetButton.addEventListener('click', () => {
+        if (!originalImage) return;
+        scale = 1.0;
+        imageCanvas.style.transform = `scale(${scale})`;
+        imageCanvas.width = originalImage.width;
+        imageCanvas.height = originalImage.height;
+        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+        ctx.drawImage(originalImage, 0, 0);
+        updateCurrentBlob();
+        showMessage('画像をリセットしました。');
+    });
+
+    // トリミング開始
+    trimButton.addEventListener('click', () => {
+        if (!originalImage) return;
+        enterCropMode();
+    });
+
+    // マスキング (角丸または中心円形マスク)
+    maskButton.addEventListener('click', () => {
+        if (!originalImage) return;
+        showLoading('マスキング中...');
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = imageCanvas.width;
+        tempCanvas.height = imageCanvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        tempCtx.drawImage(imageCanvas, 0, 0);
+        tempCtx.globalCompositeOperation = 'destination-in';
+        tempCtx.beginPath();
+        const cx = tempCanvas.width / 2;
+        const cy = tempCanvas.height / 2;
+        const r = Math.min(cx, cy) * 0.85;
+        tempCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        tempCtx.fill();
+
+        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+        ctx.drawImage(tempCanvas, 0, 0);
+        updateCurrentBlob();
+        hideLoading();
+        showMessage('画像を円形にマスキングしました。');
+    });
+
+    // 保存
+    saveButton.addEventListener('click', () => {
+        if (!currentImageBlob) {
+            showMessage('保存する画像がありません。', 'error');
+            return;
         }
-      };
-      request.onsuccess = event => resolve(event.target.result);
-      request.onerror = event => reject(event.target.error);
+        const customName = outputFilename.value.trim() || generateDefaultFilename();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(currentImageBlob);
+        a.download = `${customName}.webp`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        showMessage('WebP画像を保存しました！');
     });
-  }
 
-  if ('launchQueue' in window) {
-    window.launchQueue.setConsumer(async (launchParams) => {
-      if (!launchParams.files || launchParams.files.length === 0) {
-        return;
-      }
-      for (const fileHandle of launchParams.files) {
-        const file = await fileHandle.getFile();
-        loadImageFile(file);
-        break;
-      }
+    // 共有
+    if (navigator.share) {
+        shareButton.removeAttribute('disabled');
+        shareButton.addEventListener('click', async () => {
+            if (!currentImageBlob) return;
+            const customName = outputFilename.value.trim() || generateDefaultFilename();
+            const file = new File([currentImageBlob], `${customName}.webp`, { type: 'image/webp' });
+            try {
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: 'PWA画像エディタ', text: '編集した画像です' });
+                    showMessage('画像を共有しました！');
+                } else {
+                    showMessage('このファイルは共有できません', 'error');
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') showMessage('共有に失敗しました', 'error');
+            }
+        });
+    }
+
+    // ユーティリティ
+    function showMessage(msg, type = 'info') {
+        messageDisplay.textContent = msg;
+        messageDisplay.className = `message ${type}`;
+    }
+
+    function showLoading(msg = '処理中...') {
+        loadingOverlay.querySelector('p').textContent = msg;
+        loadingOverlay.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        loadingOverlay.classList.add('hidden');
+    }
+
+    function displayImage(fileOrUrl) {
+        showLoading('画像を読み込み中...');
+        const img = new Image();
+        img.onload = () => {
+            originalImage = img;
+            scale = 1.0;
+            imageCanvas.style.transform = `scale(${scale})`;
+
+            const MAX_DIM = 1200;
+            let w = img.width;
+            let h = img.height;
+            if (w > MAX_DIM || h > MAX_DIM) {
+                if (w > h) { h *= MAX_DIM / w; w = MAX_DIM; }
+                else { w *= MAX_DIM / h; h = MAX_DIM; }
+            }
+
+            imageCanvas.width = w;
+            imageCanvas.height = h;
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+
+            imageCanvas.classList.remove('hidden');
+            dropZoneText.classList.add('hidden');
+            selectImageButton.classList.add('hidden');
+            controls.classList.remove('hidden');
+            fileInfoArea.classList.remove('hidden');
+
+            if (fileOrUrl instanceof File) {
+                fileNameDisplay.textContent = fileOrUrl.name;
+                originalFileObject = fileOrUrl;
+            } else {
+                fileNameDisplay.textContent = 'shared_image.webp';
+            }
+
+            outputFilename.value = generateDefaultFilename();
+            updateCurrentBlob();
+            hideLoading();
+            showMessage('画像を読み込みました。');
+        };
+        img.onerror = () => {
+            hideLoading();
+            showMessage('画像の読み込みに失敗しました。', 'error');
+        };
+
+        if (typeof fileOrUrl === 'string') {
+            img.src = fileOrUrl;
+        } else {
+            img.src = URL.createObjectURL(fileOrUrl);
+        }
+    }
+
+    function updateCurrentBlob() {
+        const quality = parseInt(webpQuality.value, 10) / 100;
+        imageCanvas.toBlob(blob => {
+            currentImageBlob = blob;
+        }, 'image/webp', quality);
+    }
+
+    // トリミングモード
+    function enterCropMode() {
+        isCropping = true;
+        cropOverlay.classList.remove('hidden');
+
+        const rect = imageCanvas.getBoundingClientRect();
+        const minDim = Math.min(rect.width, rect.height) * 0.8;
+        cropRectWidth = minDim;
+        cropRectHeight = minDim;
+        cropRectX = (rect.width - minDim) / 2;
+        cropRectY = (rect.height - minDim) / 2;
+        updateCropRectStyle();
+
+        cropOverlay.addEventListener('mousedown', startCrop);
+        cropOverlay.addEventListener('mousemove', moveCrop);
+        cropOverlay.addEventListener('mouseup', endCrop);
+        cropOverlay.addEventListener('touchstart', startCrop, { passive: false });
+        cropOverlay.addEventListener('touchmove', moveCrop, { passive: false });
+        cropOverlay.addEventListener('touchend', endCrop);
+    }
+
+    function exitCropMode() {
+        isCropping = false;
+        cropOverlay.classList.add('hidden');
+        cropOverlay.removeEventListener('mousedown', startCrop);
+        cropOverlay.removeEventListener('mousemove', moveCrop);
+        cropOverlay.removeEventListener('mouseup', endCrop);
+        cropOverlay.removeEventListener('touchstart', startCrop);
+        cropOverlay.removeEventListener('touchmove', moveCrop);
+        cropOverlay.removeEventListener('touchend', endCrop);
+    }
+
+    function updateCropRectStyle() {
+        cropRect.style.width = `${cropRectWidth}px`;
+        cropRect.style.height = `${cropRectHeight}px`;
+        cropRect.style.left = `${cropRectX}px`;
+        cropRect.style.top = `${cropRectY}px`;
+    }
+
+    function startCrop(e) {
+        e.preventDefault();
+        const touch = e.touches ? e.touches[0] : e;
+        cropStartX = touch.clientX - cropRectX;
+        cropStartY = touch.clientY - cropRectY;
+        cropRect.dataset.dragging = 'true';
+    }
+
+    function moveCrop(e) {
+        e.preventDefault();
+        if (cropRect.dataset.dragging !== 'true') return;
+        const touch = e.touches ? e.touches[0] : e;
+        cropRectX = touch.clientX - cropStartX;
+        cropRectY = touch.clientY - cropStartY;
+        updateCropRectStyle();
+    }
+
+    function endCrop() {
+        delete cropRect.dataset.dragging;
+    }
+
+    applyCropButton.addEventListener('click', () => {
+        showLoading('トリミング適用中...');
+        exitCropMode();
+
+        const canvasRect = imageCanvas.getBoundingClientRect();
+        const scaleX = imageCanvas.width / canvasRect.width;
+        const scaleY = imageCanvas.height / canvasRect.height;
+
+        const sx = cropRectX * scaleX;
+        const sy = cropRectY * scaleY;
+        const sw = cropRectWidth * scaleX;
+        const sh = cropRectHeight * scaleY;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = sw;
+        tempCanvas.height = sh;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.drawImage(imageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        imageCanvas.width = sw;
+        imageCanvas.height = sh;
+        ctx.clearRect(0, 0, sw, sh);
+        ctx.drawImage(tempCanvas, 0, 0);
+
+        updateCurrentBlob();
+        hideLoading();
+        showMessage('トリミングを適用しました。');
     });
-  }
 
-  selectBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
-      loadImageFile(e.target.files[0]);
-    }
-  });
-
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-  });
-
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('dragover');
-  });
-
-  dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      loadImageFile(e.dataTransfer.files[0]);
-    }
-  });
-
-  function loadImageFile(file) {
-    originalFile = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      img.onload = () => {
-        dropzone.classList.add('hidden');
-        editorContainer.classList.remove('hidden');
-        initCanvas();
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function initCanvas() {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    
-    scale = 1;
-    panX = 0;
-    panY = 0;
-    cropRect = { x: 0, y: 0, width: img.width, height: img.height };
-    
-    updateZoomUI();
-    updateCanvasTransform();
-    drawCanvas();
-    updateFileInfo();
-  }
-
-  function updateCanvasTransform() {
-    canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
-  }
-
-  function updateZoomUI() {
-    zoomRange.value = Math.round(scale * 100);
-    zoomVal.textContent = zoomRange.value;
-  }
-
-  function drawCanvas() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0);
-
-    if (cropRect.width > 0 && cropRect.height > 0) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-      ctx.clip();
-      ctx.drawImage(img, 0, 0);
-      ctx.restore();
-
-      ctx.strokeStyle = '#2563eb';
-      ctx.lineWidth = Math.max(2, canvas.width / 200);
-      ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-    }
-  }
-
-  function getCanvasCoords(e) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
-    };
-  }
-
-  // Mouse Wheel Zoom
-  canvasWrapper.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const zoomIntensity = 0.1;
-    if (e.deltaY < 0) {
-      scale = Math.min(scale * (1 + zoomIntensity), 5);
-    } else {
-      scale = Math.max(scale * (1 - zoomIntensity), 0.5);
-    }
-    updateZoomUI();
-    updateCanvasTransform();
-  }, { passive: false });
-
-  // Zoom range input handler
-  zoomRange.addEventListener('input', (e) => {
-    scale = parseInt(e.target.value) / 100;
-    zoomVal.textContent = e.target.value;
-    updateCanvasTransform();
-  });
-
-  // Pointer / Touch Events handling
-  canvas.addEventListener('mousedown', (e) => {
-    if (currentMode === 'pan') {
-      isPanning = true;
-      startPanX = e.clientX - panX;
-      startPanY = e.clientY - panY;
-      canvas.style.cursor = 'grabbing';
-    } else {
-      isDragging = true;
-      const coords = getCanvasCoords(e);
-      startX = coords.x;
-      startY = coords.y;
-      cropRect = { x: startX, y: startY, width: 0, height: 0 };
-    }
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (isPanning) {
-      panX = e.clientX - startPanX;
-      panY = e.clientY - startPanY;
-      updateCanvasTransform();
-    } else if (isDragging) {
-      const coords = getCanvasCoords(e);
-      endX = coords.x;
-      endY = coords.y;
-
-      let x = Math.min(startX, endX);
-      let y = Math.min(startY, endY);
-      let width = Math.abs(endX - startX);
-      let height = Math.abs(endY - startY);
-
-      x = Math.max(0, Math.min(x, canvas.width));
-      y = Math.max(0, Math.min(y, canvas.height));
-      width = Math.min(width, canvas.width - x);
-      height = Math.min(height, canvas.height - y);
-
-      cropRect = { x, y, width, height };
-      drawCanvas();
-    }
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (isPanning) {
-      isPanning = false;
-      canvas.style.cursor = currentMode === 'pan' ? 'grab' : 'crosshair';
-    }
-    if (isDragging) {
-      isDragging = false;
-      if (cropRect.width < 10 || cropRect.height < 10) {
-        cropRect = { x: 0, y: 0, width: img.width, height: img.height };
-        drawCanvas();
-      }
-      updateFileInfo();
-    }
-  });
-
-  // Touch Events for Mobile Pinch & Crop/Pan
-  canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      // Pinch start
-      initialPinchDistance = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      initialScale = scale;
-      isDragging = false;
-      isPanning = false;
-    } else if (e.touches.length === 1) {
-      if (currentMode === 'pan') {
-        isPanning = true;
-        startPanX = e.touches[0].clientX - panX;
-        startPanY = e.touches[0].clientY - panY;
-      } else {
-        isDragging = true;
-        const coords = getCanvasCoords(e);
-        startX = coords.x;
-        startY = coords.y;
-        cropRect = { x: startX, y: startY, width: 0, height: 0 };
-      }
-    }
-    e.preventDefault();
-  }, { passive: false });
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && initialPinchDistance !== null) {
-      // Pinch zoom
-      const currentDistance = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const factor = currentDistance / initialPinchDistance;
-      scale = Math.min(Math.max(initialScale * factor, 0.5), 5);
-      updateZoomUI();
-      updateCanvasTransform();
-    } else if (e.touches.length === 1) {
-      if (isPanning) {
-        panX = e.touches[0].clientX - startPanX;
-        panY = e.touches[0].clientY - startPanY;
-        updateCanvasTransform();
-      } else if (isDragging) {
-        const coords = getCanvasCoords(e);
-        endX = coords.x;
-        endY = coords.y;
-
-        let x = Math.min(startX, endX);
-        let y = Math.min(startY, endY);
-        let width = Math.abs(endX - startX);
-        let height = Math.abs(endY - startY);
-
-        x = Math.max(0, Math.min(x, canvas.width));
-        y = Math.max(0, Math.min(y, canvas.height));
-        width = Math.min(width, canvas.width - x);
-        height = Math.min(height, canvas.height - y);
-
-        cropRect = { x, y, width, height };
-        drawCanvas();
-      }
-    }
-    e.preventDefault();
-  }, { passive: false });
-
-  window.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
-      initialPinchDistance = null;
-    }
-    if (isPanning) {
-      isPanning = false;
-    }
-    if (isDragging) {
-      isDragging = false;
-      if (cropRect.width < 10 || cropRect.height < 10) {
-        cropRect = { x: 0, y: 0, width: img.width, height: img.height };
-        drawCanvas();
-      }
-      updateFileInfo();
-    }
-  });
-
-  qualityRange.addEventListener('input', (e) => {
-    qualityVal.textContent = e.target.value;
-    updateFileInfo();
-  });
-
-  resetBtn.addEventListener('click', () => {
-    editorContainer.classList.add('hidden');
-    dropzone.classList.remove('hidden');
-    fileInput.value = '';
-    originalFile = null;
-    scale = 1;
-    panX = 0;
-    panY = 0;
-    updateZoomUI();
-    updateCanvasTransform();
-  });
-
-  function updateFileInfo() {
-    if (!originalFile) return;
-    const originalSizeFormatted = formatBytes(originalFile.size);
-    const quality = parseInt(qualityRange.value) / 100;
-    
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = cropRect.width || img.width;
-    tempCanvas.height = cropRect.height || img.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    const srcX = cropRect.width ? cropRect.x : 0;
-    const srcY = cropRect.height ? cropRect.y : 0;
-    const srcW = cropRect.width || img.width;
-    const srcH = cropRect.height || img.height;
-
-    tempCtx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, tempCanvas.width, tempCanvas.height);
-    
-    tempCanvas.toBlob((blob) => {
-      if (blob) {
-        fileInfo.textContent = `元サイズ: ${originalSizeFormatted} / 予想 WebP: ${formatBytes(blob.size)}`;
-      }
-    }, 'image/webp', quality);
-  }
-
-  convertBtn.addEventListener('click', () => {
-    const quality = parseInt(qualityRange.value) / 100;
-    
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = cropRect.width || img.width;
-    tempCanvas.height = cropRect.height || img.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    const srcX = cropRect.width ? cropRect.x : 0;
-    const srcY = cropRect.height ? cropRect.y : 0;
-    const srcW = cropRect.width || img.width;
-    const srcH = cropRect.height || img.height;
-
-    tempCtx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, tempCanvas.width, tempCanvas.height);
-    
-    tempCanvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const originalName = originalFile ? originalFile.name.substring(0, originalFile.name.lastIndexOf('.')) || originalFile.name : 'image';
-      a.download = `${originalName}_converted.webp`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 'image/webp', quality);
-  });
-
-  function formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-  }
+    cancelCropButton.addEventListener('click', () => {
+        exitCropMode();
+        showMessage('トリミングをキャンセルしました。');
+    });
 });

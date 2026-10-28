@@ -1,4 +1,4 @@
-const CACHE_NAME = 'webp-converter-v5';
+const CACHE_NAME = 'image-editor-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -8,28 +8,9 @@ const ASSETS = [
   './icon.svg'
 ];
 
-const DB_NAME = 'ImageEditorDB';
-const STORE_NAME = 'sharedImages';
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = event => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            }
-        };
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
   self.skipWaiting();
 });
@@ -39,9 +20,7 @@ self.addEventListener('activate', (e) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
+          if (key !== CACHE_NAME) return caches.delete(key);
         })
       );
     })
@@ -51,54 +30,38 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-
-  if (
-    e.request.method === 'POST' &&
-    url.pathname.endsWith('share-target')
-  ) {
+  if (e.request.method === 'POST' && url.pathname === '/') {
     e.respondWith(
       (async () => {
-        try {
-          const formData = await e.request.formData();
-          const file = formData.get('image');
+        const formData = await e.request.formData();
+        const file = formData.get('image');
+        if (file) {
+          const db = await openDB();
+          const tx = db.transaction('sharedImages', 'readwrite');
+          tx.objectStore('sharedImages').put({ id: 'latestShared', file: file });
+          await new Promise(resolve => { tx.oncomplete = resolve; });
 
-          if (file) {
-            const db = await openDB();
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-
-            store.put({
-              id: 'latestShared',
-              file: file,
-              timestamp: Date.now()
-            });
-
-            const allClients = await clients.matchAll({
-              type: 'window',
-              includeUncontrolled: true
-            });
-
-            for (const client of allClients) {
-              client.postMessage({
-                type: 'shared-image',
-                file: file
-              });
-            }
+          const clientsList = await clients.matchAll({ type: 'window' });
+          for (const client of clientsList) {
+            client.postMessage({ type: 'shared-image', file: file });
           }
-        } catch (err) {
-          console.error('Error handling shared target POST:', err);
         }
-
-        return Response.redirect('./index.html', 303);
+        return Response.redirect('./', 303);
       })()
     );
-
     return;
   }
 
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      return cachedResponse || fetch(e.request);
-    })
+    caches.match(e.request).then((cached) => cached || fetch(e.request))
   );
 });
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('ImageEditorDB', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('sharedImages', { keyPath: 'id' });
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e.target.error);
+    });
+}

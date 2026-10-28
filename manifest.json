@@ -1,39 +1,30 @@
 {
-  "name": "Image Cropper & WebP Converter",
-  "short_name": "ImgConverter",
-  "description": "Crop and convert images to WebP format",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
-  "icons": [
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ],
-  "share_target": {
-    "action": "./share-target",
-    "method": "POST",
-    "enctype": "multipart/form-data",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url",
-      "files": [
+    "name": "PWA 画像エディタ",
+    "short_name": "画像エディタ",
+    "description": "共有から画像を受け取り、WebP変換、トリミング、マスキングが可能なPWA",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#4285F4",
+    "icons": [
         {
-          "name": "image",
-          "accept": [
-            "image/*",
-            "image/png",
-            "image/jpeg",
-            "image/webp"
-          ]
+            "src": "/icon.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
         }
-      ]
+    ],
+    "share_target": {
+        "action": "/",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "files": [
+                {
+                    "name": "image",
+                    "accept": ["image/*"]
+                }
+            ]
+        }
     }
-  }
 }
