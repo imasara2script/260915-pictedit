@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = imageCanvas.getContext('2d');
     const imageInput = document.getElementById('imageInput');
     const selectImageButton = document.getElementById('selectImageButton');
-    const dropZoneText = document.getElementById('dropZoneText');
+    const uploadPrompt = document.getElementById('uploadPrompt');
     const controls = document.getElementById('controls');
     const webpQuality = document.getElementById('webpQuality');
     const webpQualityValue = document.getElementById('webpQualityValue');
@@ -27,11 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const applyCropButton = document.getElementById('applyCropButton');
     const cancelCropButton = document.getElementById('cancelCropButton');
 
-    let originalImage = null; // 常にオリジナルのImage
+    let originalImage = null;
     let currentImageBlob = null;
-    let originalFileObject = null;
     let scale = 1.0;
-    let isCropping = false;
     let cropStartX, cropStartY;
     let cropRectX, cropRectY, cropRectWidth, cropRectHeight;
 
@@ -84,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     checkSharedImage();
 
-    // デフォルトファイル名生成 (年月日 時分秒)
     function generateDefaultFilename() {
         const now = new Date();
         const y = now.getFullYear();
@@ -96,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${y}${m}${d}_${h}${min}${s}`;
     }
 
-    // イベントリスナー
     selectImageButton.addEventListener('click', () => imageInput.click());
 
     imageInput.addEventListener('change', (e) => {
@@ -117,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCurrentBlob();
     });
 
-    // 比較ボタン (押している間元画像を表示)
     const showOriginal = () => {
         if (!originalImage) return;
         ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
@@ -126,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hideOriginal = () => {
         if (!originalImage) return;
-        updateCurrentBlob(); // 再描画
+        updateCurrentBlob();
     };
 
     compareButton.addEventListener('mousedown', showOriginal);
@@ -135,7 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
     compareButton.addEventListener('touchstart', (e) => { e.preventDefault(); showOriginal(); });
     compareButton.addEventListener('touchend', (e) => { e.preventDefault(); hideOriginal(); });
 
-    // ズーム・パン (拡大縮小操作)
     canvasContainer.addEventListener('wheel', (e) => {
         e.preventDefault();
         scale += e.deltaY * -0.001;
@@ -143,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
         imageCanvas.style.transform = `scale(${scale})`;
     }, { passive: false });
 
-    // リセット
     resetButton.addEventListener('click', () => {
         if (!originalImage) return;
         scale = 1.0;
@@ -156,13 +149,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showMessage('画像をリセットしました。');
     });
 
-    // トリミング開始
     trimButton.addEventListener('click', () => {
         if (!originalImage) return;
         enterCropMode();
     });
 
-    // マスキング (角丸または中心円形マスク)
     maskButton.addEventListener('click', () => {
         if (!originalImage) return;
         showLoading('マスキング中...');
@@ -188,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showMessage('画像を円形にマスキングしました。');
     });
 
-    // 保存
     saveButton.addEventListener('click', () => {
         if (!currentImageBlob) {
             showMessage('保存する画像がありません。', 'error');
@@ -205,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showMessage('WebP画像を保存しました！');
     });
 
-    // 共有
     if (navigator.share) {
         shareButton.removeAttribute('disabled');
         shareButton.addEventListener('click', async () => {
@@ -225,10 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ユーティリティ
-    function showMessage(msg, type = 'info') {
+    function showMessage(msg) {
         messageDisplay.textContent = msg;
-        messageDisplay.className = `message ${type}`;
     }
 
     function showLoading(msg = '処理中...') {
@@ -262,14 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.drawImage(img, 0, 0, w, h);
 
             imageCanvas.classList.remove('hidden');
-            dropZoneText.classList.add('hidden');
-            selectImageButton.classList.add('hidden');
+            uploadPrompt.classList.add('hidden');
             controls.classList.remove('hidden');
             fileInfoArea.classList.remove('hidden');
 
             if (fileOrUrl instanceof File) {
                 fileNameDisplay.textContent = fileOrUrl.name;
-                originalFileObject = fileOrUrl;
             } else {
                 fileNameDisplay.textContent = 'shared_image.webp';
             }
@@ -281,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         img.onerror = () => {
             hideLoading();
-            showMessage('画像の読み込みに失敗しました。', 'error');
+            showMessage('画像の読み込みに失敗しました。');
         };
 
         if (typeof fileOrUrl === 'string') {
@@ -298,9 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 'image/webp', quality);
     }
 
-    // トリミングモード
     function enterCropMode() {
-        isCropping = true;
         cropOverlay.classList.remove('hidden');
 
         const rect = imageCanvas.getBoundingClientRect();
@@ -320,7 +303,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exitCropMode() {
-        isCropping = false;
         cropOverlay.classList.add('hidden');
         cropOverlay.removeEventListener('mousedown', startCrop);
         cropOverlay.removeEventListener('mousemove', moveCrop);

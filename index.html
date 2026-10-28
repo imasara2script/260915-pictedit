@@ -19,23 +19,25 @@
         </div>
 
         <div class="file-info-area hidden" id="fileInfoArea">
-            <p>選択中のファイル: <span id="fileNameDisplay">-</span></p>
+            <span>選択中のファイル: <strong id="fileNameDisplay">-</strong></span>
         </div>
 
         <div class="image-area">
             <div class="canvas-container" id="canvasContainer">
                 <canvas id="imageCanvas" class="hidden"></canvas>
             </div>
-            <p id="dropZoneText">画像をここにドラッグ＆ドロップ、またはファイルを選択してください。</p>
-            <input type="file" id="imageInput" accept="image/*" class="hidden">
-            <button id="selectImageButton" class="main-button">画像を選択</button>
+            <div id="uploadPrompt" class="upload-prompt">
+                <p id="dropZoneText">画像をここにドラッグ＆ドロップ、またはファイルを選択してください。</p>
+                <input type="file" id="imageInput" accept="image/*" class="hidden">
+                <button id="selectImageButton" class="main-button">画像を選択</button>
+            </div>
         </div>
 
         <div id="controls" class="controls-group hidden">
             <div class="editor-section">
                 <h2>プレビュー切替</h2>
                 <div class="button-group">
-                    <button id="compareButton" class="action-button preview-btn">元画像を表示 (長押し/押下中)</button>
+                    <button id="compareButton" class="action-button preview-btn">元画像を表示 (長押し中)</button>
                 </div>
             </div>
 
@@ -44,14 +46,14 @@
                 <div class="button-group">
                     <button id="trimButton" class="action-button">トリミング</button>
                     <button id="maskButton" class="action-button">マスキング</button>
-                    <button id="resetButton" class="action-button">リセット</button>
+                    <button id="resetButton" class="action-button danger-btn">リセット</button>
                 </div>
             </div>
 
             <div class="editor-section">
                 <h2>WebP設定 & 出力</h2>
                 <div class="slider-group">
-                    <label for="webpQuality">画質 (<span id="webpQualityValue">80</span>)</label>
+                    <label for="webpQuality">画質: <span id="webpQualityValue">80</span>%</label>
                     <input type="range" id="webpQuality" min="1" max="100" value="80">
                 </div>
                 <div class="input-group">
@@ -59,7 +61,7 @@
                     <input type="text" id="outputFilename" placeholder="自動設定されます">
                 </div>
                 <div class="button-group" style="margin-top: 15px;">
-                    <button id="saveButton" class="action-button">ファイルを保存</button>
+                    <button id="saveButton" class="action-button primary-action">ファイルを保存</button>
                     <button id="shareButton" class="action-button" disabled>共有</button>
                 </div>
             </div>
