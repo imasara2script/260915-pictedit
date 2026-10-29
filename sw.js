@@ -1,4 +1,4 @@
-const CACHE_NAME = 'image-editor-v7';
+const CACHE_NAME = 'image-editor-v8';
 const ASSETS = [
     './',
     './index.html',

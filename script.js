@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = imageCanvas.getContext('2d');
     const canvasContainer = document.getElementById('canvasContainer');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const fileSizeDisplay = document.getElementById('fileSizeDisplay');
     const compareBtn = document.getElementById('compareBtn');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
@@ -78,6 +79,16 @@ document.addEventListener('DOMContentLoaded', () => {
             req.onsuccess = e => resolve(e.target.result);
             req.onerror = e => reject(e.target.error);
         });
+    }
+
+    // Format bytes to readable string
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 
     // Generate default filename: YYYYMMDD_HHMMSS
@@ -170,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     }
 
-    // Update canvas display with compressed webp quality preview
+    // Update canvas display with compressed webp quality preview and file size
     function updatePreviewAndBlob() {
         if (!workingCanvas.width) return;
         const quality = parseInt(qualityRange.value, 10) / 100;
@@ -179,6 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
         workingCanvas.toBlob(blob => {
             currentBlob = blob;
             if (!blob) return;
+
+            // Display live file size
+            fileSizeDisplay.textContent = formatBytes(blob.size);
 
             // Render compressed blob back to display canvas to reflect quality preview
             const url = URL.createObjectURL(blob);

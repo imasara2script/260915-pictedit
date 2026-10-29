@@ -171,17 +171,29 @@ main {
 
 .file-badge {
     background: #f1f5f9;
-    padding: 6px 12px;
+    padding: 8px 12px;
     border-radius: 6px;
     font-size: 0.85rem;
     color: var(--text-light);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
     word-break: break-all;
-    text-align: center;
+}
+
+.file-size-badge {
+    color: var(--primary);
+    background: #e0f2fe;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
 }
 
 .canvas-container {
     width: 100%;
-    height: 300px;
+    height: 280px;
     background: #f8fafc;
     border: 1px solid var(--border);
     border-radius: var(--radius);
