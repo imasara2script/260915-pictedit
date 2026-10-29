@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const toast = document.getElementById('toast');
 
     let originalImage = null;
+    let workingCanvas = document.createElement('canvas'); // Base edited canvas
+    let workingCtx = workingCanvas.getContext('2d');
     let currentBlob = null;
     let currentScale = 1.0;
     let originalFileName = 'image';
@@ -142,17 +144,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     else { w = Math.round(w * (maxDim / h)); h = maxDim; }
                 }
 
+                // Setup working canvas
+                workingCanvas.width = w;
+                workingCanvas.height = h;
+                workingCtx.clearRect(0, 0, w, h);
+                workingCtx.drawImage(img, 0, 0, w, h);
+
+                // Setup display canvas
                 imageCanvas.width = w;
                 imageCanvas.height = h;
                 ctx.clearRect(0, 0, w, h);
-                ctx.drawImage(img, 0, 0, w, h);
+                ctx.drawImage(workingCanvas, 0, 0);
 
                 uploadArea.classList.add('hidden');
                 editorArea.classList.remove('hidden');
                 fileNameDisplay.textContent = file.name || 'shared_image.webp';
                 filenameInput.value = generateDefaultFilename();
 
-                updateBlob();
+                updatePreviewAndBlob();
                 hideLoading();
                 showToast('画像を読み込みました');
             };
@@ -161,15 +170,29 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     }
 
-    function updateBlob() {
+    // Update canvas display with compressed webp quality preview
+    function updatePreviewAndBlob() {
+        if (!workingCanvas.width) return;
         const quality = parseInt(qualityRange.value, 10) / 100;
         qualityVal.textContent = qualityRange.value;
-        imageCanvas.toBlob(blob => {
+
+        workingCanvas.toBlob(blob => {
             currentBlob = blob;
+            if (!blob) return;
+
+            // Render compressed blob back to display canvas to reflect quality preview
+            const url = URL.createObjectURL(blob);
+            const previewImg = new Image();
+            previewImg.onload = () => {
+                ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+                ctx.drawImage(previewImg, 0, 0);
+                URL.revokeObjectURL(url);
+            };
+            previewImg.src = url;
         }, 'image/webp', quality);
     }
 
-    qualityRange.addEventListener('input', updateBlob);
+    qualityRange.addEventListener('input', updatePreviewAndBlob);
 
     // Zoom Controls
     zoomInBtn.addEventListener('click', () => {
@@ -184,13 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Compare with Original (Hold/Touch)
     const showOrig = () => {
-        if (!originalImage) return;
+        if (!originalImage && !workingCanvas.width) return;
         ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        ctx.drawImage(originalImage, 0, 0, imageCanvas.width, imageCanvas.height);
+        ctx.drawImage(workingCanvas, 0, 0);
     };
     const hideOrig = () => {
-        if (!originalImage) return;
-        updateBlob();
+        if (!workingCanvas.width) return;
+        updatePreviewAndBlob();
     };
 
     compareBtn.addEventListener('mousedown', showOrig);
@@ -204,35 +227,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!originalImage) return;
         currentScale = 1.0;
         imageCanvas.style.transform = `scale(${currentScale})`;
-        imageCanvas.width = originalImage.width;
-        imageCanvas.height = originalImage.height;
-        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        ctx.drawImage(originalImage, 0, 0);
-        updateBlob();
+        
+        let w = originalImage.width;
+        let h = originalImage.height;
+        const maxDim = 1600;
+        if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+            else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+        }
+
+        workingCanvas.width = w;
+        workingCanvas.height = h;
+        workingCtx.clearRect(0, 0, w, h);
+        workingCtx.drawImage(originalImage, 0, 0, w, h);
+
+        imageCanvas.width = w;
+        imageCanvas.height = h;
+
+        updatePreviewAndBlob();
         showToast('リセットしました');
     });
 
     // Circular Masking
     maskBtn.addEventListener('click', () => {
-        if (!originalImage) return;
+        if (!workingCanvas.width) return;
         showLoading('マスキング中...');
         setTimeout(() => {
-            const w = imageCanvas.width;
-            const h = imageCanvas.height;
+            const w = workingCanvas.width;
+            const h = workingCanvas.height;
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = w;
             tempCanvas.height = h;
             const tCtx = tempCanvas.getContext('2d');
 
-            tCtx.drawImage(imageCanvas, 0, 0);
+            tCtx.drawImage(workingCanvas, 0, 0);
             tCtx.globalCompositeOperation = 'destination-in';
             tCtx.beginPath();
             tCtx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
             tCtx.fill();
 
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(tempCanvas, 0, 0);
-            updateBlob();
+            workingCtx.clearRect(0, 0, w, h);
+            workingCtx.drawImage(tempCanvas, 0, 0);
+
+            updatePreviewAndBlob();
             hideLoading();
             showToast('丸型マスキングを適用しました');
         }, 50);
@@ -243,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDragging = false, startX, startY;
 
     trimBtn.addEventListener('click', () => {
-        if (!originalImage) return;
+        if (!workingCanvas.width) return;
         cropOverlay.classList.remove('hidden');
         const rect = canvasContainer.getBoundingClientRect();
         cropW = Math.min(rect.width * 0.7, 250);
@@ -310,16 +347,19 @@ document.addEventListener('DOMContentLoaded', () => {
             tempCanvas.width = sw;
             tempCanvas.height = sh;
             const tCtx = tempCanvas.getContext('2d');
-            tCtx.drawImage(imageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+            tCtx.drawImage(workingCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+            workingCanvas.width = sw;
+            workingCanvas.height = sh;
+            workingCtx.clearRect(0, 0, sw, sh);
+            workingCtx.drawImage(tempCanvas, 0, 0);
 
             imageCanvas.width = sw;
             imageCanvas.height = sh;
-            ctx.clearRect(0, 0, sw, sh);
-            ctx.drawImage(tempCanvas, 0, 0);
 
             currentScale = 1.0;
             imageCanvas.style.transform = `scale(${currentScale})`;
-            updateBlob();
+            updatePreviewAndBlob();
             hideLoading();
             showToast('トリミングを適用しました');
         }, 50);
